@@ -8,10 +8,15 @@ import cuchaz.enigma.analysis.index.JarIndex;
 import cuchaz.enigma.api.service.NameProposalService;
 import cuchaz.enigma.bytecode.translators.SourceFixVisitor;
 import cuchaz.enigma.bytecode.translators.TranslationClassVisitor;
-import cuchaz.enigma.source.*;
+import cuchaz.enigma.source.Decompiler;
+import cuchaz.enigma.source.DecompilerService;
+import cuchaz.enigma.source.Decompilers;
+import cuchaz.enigma.source.SourceSettings;
 import cuchaz.enigma.translation.ProposingTranslator;
 import cuchaz.enigma.translation.Translator;
-import cuchaz.enigma.translation.mapping.*;
+import cuchaz.enigma.translation.mapping.EntryMapping;
+import cuchaz.enigma.translation.mapping.EntryRemapper;
+import cuchaz.enigma.translation.mapping.MappingsChecker;
 import cuchaz.enigma.translation.mapping.tree.DeltaTrackingTree;
 import cuchaz.enigma.translation.mapping.tree.EntryTree;
 import cuchaz.enigma.translation.representation.entry.ClassEntry;
@@ -19,13 +24,14 @@ import cuchaz.enigma.translation.representation.entry.Entry;
 import cuchaz.enigma.translation.representation.entry.LocalVariableEntry;
 import cuchaz.enigma.translation.representation.entry.MethodEntry;
 import cuchaz.enigma.utils.I18n;
-
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.tree.ClassNode;
 
-import java.io.*;
+import java.io.BufferedWriter;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Objects;
@@ -225,17 +231,25 @@ public class EnigmaProject {
 
 			//create a common instance outside the loop as mappings shouldn't be changing while this is happening
 			Decompiler decompiler = decompilerService.create(compiled::get, new SourceSettings(false, false));
+            Decompiler altDecompiler = Decompilers.CFR.create(compiled::get, new SourceSettings(false, false));
 
 			AtomicInteger count = new AtomicInteger();
 
-			Collection<ClassSource> decompiled = classes.parallelStream()
-					.map(translatedNode -> {
-						progress.step(count.getAndIncrement(), translatedNode.name);
-
-						String source = decompileClass(translatedNode, decompiler);
-						return new ClassSource(translatedNode.name, source);
-					})
-					.collect(Collectors.toList());
+            Collection<ClassSource> decompiled = new ArrayList<>(classes.size());
+            classes.parallelStream().forEach(translatedNode -> {
+                try {
+                    String source = decompileClass(translatedNode, decompiler);
+                    decompiled.add(new ClassSource(translatedNode.name, source));
+                } catch (Throwable e) {
+                    try {
+                        String source = decompileClass(translatedNode, altDecompiler);
+                        decompiled.add(new ClassSource(translatedNode.name, source));
+                    } catch (Throwable e2) {
+                        System.err.println("Error decompiling " + translatedNode.name);
+                    }
+                }
+                progress.step(count.getAndIncrement(), translatedNode.name);
+            });
 
 			return new SourceExport(decompiled);
 		}
