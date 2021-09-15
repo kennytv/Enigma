@@ -223,7 +223,14 @@ public class EnigmaProject {
 
 			if (node != null) {
 				ClassNode translatedNode = new ClassNode();
+				// hacks start
+				try {
 				node.accept(new TranslationClassVisitor(deobfuscator, Enigma.ASM_VERSION, translatedNode));
+				} catch (Exception ignored) {
+					System.err.println("Failed " + translatedEntry.toString());
+					return null;
+				}
+				// hacks end
 				return translatedNode;
 			}
 
@@ -275,6 +282,7 @@ public class EnigmaProject {
 
 			//create a common instance outside the loop as mappings shouldn't be changing while this is happening
 			Decompiler decompiler = decompilerService.create(compiled::get, new SourceSettings(false, false));
+			Decompiler altDecompiler = cuchaz.enigma.source.Decompilers.PROCYON.create(compiled::get, new SourceSettings(false, false)); // hacks
 
 			AtomicInteger count = new AtomicInteger();
 
@@ -286,6 +294,11 @@ public class EnigmaProject {
 				try {
 					source = decompileClass(translatedNode, decompiler);
 				} catch (Throwable throwable) {
+					// hacks start
+					try {
+						source = decompileClass(translatedNode, altDecompiler);
+					} catch (Throwable throwable2) {
+						// hacks end
 					switch (errorStrategy) {
 					case PROPAGATE:
 						throw throwable;
@@ -298,6 +311,7 @@ public class EnigmaProject {
 						break;
 					}
 					}
+					} // hacks
 				}
 
 				if (source == null) {

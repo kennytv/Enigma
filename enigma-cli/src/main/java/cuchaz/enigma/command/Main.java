@@ -52,6 +52,7 @@ public class Main {
 			System.out.println(String.format("%s - %s", Enigma.NAME, Enigma.VERSION));
 			System.out.println("Command " + ex.command.name + " has encountered an error! Usage:");
 			printHelp(ex.command);
+			ex.printStackTrace(); // hacks - You might argue the actual cause could be good to know
 			System.exit(1);
 		} catch (IllegalArgumentException ex) {
 			System.err.println(ex.getMessage());
